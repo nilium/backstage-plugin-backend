@@ -50,6 +50,7 @@ import type {
     CatalogApi,
     GetEntitiesResponse
 } from '@backstage/catalog-client';
+import { stringifyEntityRef } from '@backstage/catalog-model';
 
 
 export interface RouterOptions {
@@ -487,20 +488,18 @@ export async function createRouter(
                 response.status(400).json("Bad Request: 'serviceId' must be provided as part of the request body");
                 return;
             }
+            if (!entity.entityRef) {
+                response.status(400).json("Bad Request: 'entityRef' must be provided as part of the request body");
+                return;
+            }
 
-            // Get all the entity mappings from the database
-            const entityMappings = await store.getAllEntityMappings();
-            const oldMapping = entityMappings.find((mapping) => mapping.serviceId === entity.serviceId);
-
-            // in case a mapping is defined and no integration exists, 
+            // in case a mapping is defined and no integration exists,
             // we need to create one
-            if (entity.entityRef !== "" &&
-                (entity.integrationKey === "" || entity.integrationKey === undefined)) {
-
+            if (!entity.integrationKey) {
                 const backstageVendorId = 'PRO19CT';
                 // check for existing integration key on service
                 const service = await getServiceById(entity.serviceId, entity.account);
-                const backstageIntegration = service.integrations?.find((integration) => integration.vendor?.id === backstageVendorId);
+                const backstageIntegration = service?.integrations?.find((integration) => integration.vendor?.id === backstageVendorId);
 
                 if (!backstageIntegration) {
                     // If an integration does not exist for service,                
@@ -517,18 +516,33 @@ export async function createRouter(
                 }
             }
 
+            // Get prior instance of the entity's mapping, if any.
+            const oldMapping = await store.findEntityMappingByEntityRef(entity.entityRef);
+
+            // If the old and new mapping are the same, do nothing and return.
+            // Without this, refreshEntity can loop back around to itself by forcing a refresh of
+            // service info.
+            if (
+                oldMapping
+                && oldMapping.entityRef === entity.entityRef
+                && oldMapping.serviceId === entity.serviceId
+                && equiv(oldMapping.account, entity.account)
+                && equiv(oldMapping.integrationKey, entity.integrationKey)
+            ) {
+                response.json({
+                    id: oldMapping.id,
+                    entityRef: entity.entityRef,
+                    integrationKey: entity.integrationKey,
+                    serviceId: entity.serviceId,
+                    status: entity.status,
+                    account: entity.account,
+                });
+                return
+            }
+
             const entityMappingId = await store.insertEntityMapping(entity);
-
-            // Refresh new and old entity unless they are empty strings
-            if (entity.entityRef !== "") {
-                // force refresh of new entity
-                await catalogApi?.refreshEntity(entity.entityRef);
-            }
-
-            if (oldMapping && oldMapping.entityRef !== "") {
-                // force refresh of old entity
-                await catalogApi?.refreshEntity(oldMapping.entityRef);
-            }
+            // Refresh entity.
+            await catalogApi?.refreshEntity(entity.entityRef);
 
             response.json({
                 id: entityMappingId,
@@ -588,18 +602,18 @@ export async function createRouter(
     router.get('/mapping/entity/:type/:namespace/:name', async (request, response) => {
         try {
             // Get the type, namespace and entity name from the request parameters
-            const entityType: string = request.params.type || '';
-            const entityNamespace: string = request.params.namespace || '';
-            const entityName: string = request.params.name || '';
+            const kind: string = request.params.type || '';
+            const namespace: string = request.params.namespace || '';
+            const name: string = request.params.name || '';
 
-            if (entityType === ''
-                || entityNamespace === ''
-                || entityName === '') {
+            if (kind === ''
+                || namespace === ''
+                || name === '') {
                 response.status(400).json("Required params not specified.");
                 return;
             }
 
-            const entityRef = `${entityType}:${entityNamespace}/${entityName}`.toLowerCase();
+            const entityRef = stringifyEntityRef({ kind, namespace, name });
 
             // Get all the entity mappings from the database
             const entityMapping = await store.findEntityMappingByEntityRef(entityRef);
@@ -625,37 +639,10 @@ export async function createRouter(
     });
 
     // GET /mapping/entity/service/:serviceId
-    router.get('/mapping/entity/service/:serviceId', async (request, response) => {
-        try {
-            // Get the type, namespace and entity name from the request parameters
-            const serviceId: string = request.params.serviceId ?? '';
-
-            if (serviceId === '') {
-                response.status(400).json("Required params not specified.");
-                return;
-            }
-
-            // Get all the entity mappings from the database
-            const entityMapping = await store.findEntityMappingByServiceId(serviceId);
-
-            if (!entityMapping) {
-                response.status(404).json(`Mapping for serviceId ${serviceId} not found.`);
-                return;
-            }
-
-            response.json({
-                mapping: entityMapping
-            });
-
-        } catch (error) {
-            if (error instanceof HttpError) {
-                response.status(error.status).json({
-                    errors: [
-                        `${error.message}`
-                    ]
-                });
-            }
-        }
+    router.get('/mapping/entity/service/:serviceId', async (_request, response) => {
+        response.status(404).json({
+            error: 'findServiceMappingById (/mapping/entity/service) no longer supported, use findServiceMapping (/mapping/entity) instead',
+        });
     });
 
     // GET /escalation_policies
@@ -928,4 +915,12 @@ export async function createRouter(
 
     // Return the router
     return router;
+}
+
+type Maybe<S> = S | undefined | null;
+
+function equiv(l: Maybe<string>, r: Maybe<string>): boolean {
+    return l === r
+        || (l === null && r === null)
+        || (l === undefined && r === undefined);
 }
