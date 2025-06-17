@@ -14,38 +14,67 @@
  * limitations under the License.
  */
 
-import { PagerDutyAccountConfig, PagerDutyOAuthConfig } from '@pagerduty/backstage-plugin-common';
-
 export interface Config {
+  /**
+   * Configuration for the PagerDuty plugin
+   * @visibility backend
+   */
+  pagerDuty?: {
     /**
-     * Configuration for the PagerDuty plugin
-     * @visibility frontend
+     * Optional Events Base URL to override the default.
+     * @visibility backend
      */
-    pagerDuty?: {
-        /**
-         * Optional Events Base URL to override the default.
-         * @visibility frontend
-         */
-        eventsBaseUrl?: string;
-        /**
-         * Optional API Base URL to override the default.
-         * @visibility frontend
-         */
-        apiBaseUrl?: string;
-        /**
-         * Optional PagerDuty API Token used in API calls from the backend component.
-         * @visibility secret
-         */
-        apiToken?: string;
-        /**
-         * Optional PagerDuty Scoped OAuth Token used in API calls from the backend component.
-         * @deepVisibility secret
-         */
-        oauth?: PagerDutyOAuthConfig;
-        /**
-         * Optional PagerDuty multi-account configuration
-         * @deepVisibility secret
-         */
-        accounts?: PagerDutyAccountConfig[];
+    eventsBaseUrl?: string;
+    /**
+     * Optional API Base URL to override the default.
+     * @visibility backend
+     */
+    apiBaseUrl?: string;
+    /**
+     * Optional PagerDuty API Token used in API calls from the backend component.
+     * @visibility secret
+     */
+    apiToken?: string;
+    /**
+     * Optional PagerDuty Scoped OAuth Token used in API calls from the backend component.
+     * @visibility backend
+     */
+    oauth?: {
+      /** @visibility backend */
+      clientId: string;
+      /** @visibility secret */
+      clientSecret: string;
+      /** @visibility backend */
+      region?: string;
+      /** @visibility backend */
+      subDomain: string;
     };
+    /**
+     * Optional PagerDuty multi-account configuration
+     * @visibility backend
+     */
+    accounts?: {
+      /** @visibility backend */
+      id: string;
+      /** @visibility backend */
+      isDefault?: boolean;
+      /** @visibility backend */
+      eventsBaseUrl?: string;
+      /** @visibility backend */
+      apiBaseUrl?: string;
+      /** @visibility secret */
+      apiToken?: string;
+      /** @visibility backend */
+      oauth?: {
+        /** @visibility backend */
+        clientId: string;
+        /** @visibility secret */
+        clientSecret: string;
+        /** @visibility backend */
+        region?: string;
+        /** @visibility backend */
+        subDomain: string;
+      };
+    }[];
+  };
 }

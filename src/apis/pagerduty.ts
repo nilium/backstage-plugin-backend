@@ -929,7 +929,7 @@ export async function fetchWithRetries(url: string, options: RequestInit): Promi
             response = await fetch(url, options);
             return response;
         } catch (e) {
-            error = e;
+            error = e as Error;
         }
 
         const timeout = delay * factor;
