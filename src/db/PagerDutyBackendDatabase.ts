@@ -55,8 +55,8 @@ export class PagerDutyBackendDatabase implements PagerDutyBackendStore {
                 account: entity.account,
                 processedDate: new Date(),
             })
-            .onConflict(['serviceId'])
-            .merge(['entityRef', 'integrationKey', 'account', 'processedDate'])        
+            .onConflict(['entityRef'])
+            .merge(['serviceId', 'integrationKey', 'account', 'processedDate'])        
             .returning('id');
 
         return result.id;

@@ -46,46 +46,41 @@ export function setFallbackEndpointConfig(account: PagerDutyAccountConfig) {
 }
 
 export function insertEndpointConfig(account: PagerDutyAccountConfig) {
-    EndpointConfig[account.id] = {
+    const endpoints: PagerDutyEndpointConfig = {
         eventsBaseUrl: account.eventsBaseUrl ?? 'https://events.pagerduty.com/v2',
         apiBaseUrl: account.apiBaseUrl ?? 'https://api.pagerduty.com'
     };
+    EndpointConfig[account.id] = endpoints;
+    if (account.isDefault) {
+        EndpointConfig.default = endpoints;
+        setFallbackEndpointConfig(account);
+    }
 }
 
 export function loadPagerDutyEndpointsFromConfig(config: RootConfigService, logger: LoggerService) {
-
-    if (config.getOptional('pagerDuty.accounts')) {
+    let accounts = config.getOptional<PagerDutyAccountConfig[]>('pagerDuty.accounts');
+    if (accounts) {
         logger.debug(`New accounts configuration detected. Loading PagerDuty endpoints from config.`);
         isLegacyConfig = false;
 
-        const accounts = config.getOptional<PagerDutyAccountConfig[]>('pagerDuty.accounts');
-
         if (accounts?.length === 1) {
             logger.debug(`Single account configuration detected. Loading PagerDuty endpoints from config to 'default'.`);
-            EndpointConfig.default = {
-                eventsBaseUrl: accounts[0].eventsBaseUrl !== undefined ? accounts[0].eventsBaseUrl : 'https://events.pagerduty.com/v2',
-                apiBaseUrl: accounts[0].apiBaseUrl !== undefined ? accounts[0].apiBaseUrl : 'https://api.pagerduty.com'
-            };
+            accounts = [
+                {
+                    ...accounts[0],
+                    isDefault: true,
+                },
+            ];
         }
-        else {
-            logger.debug(`Multiple account configuration detected. Loading PagerDuty endpoints from config.`);
-            accounts?.forEach((account) => {
-
-                if (account.isDefault) {
-                    setFallbackEndpointConfig(account);
-                }
-
-                insertEndpointConfig(account);
-            });
-        }
+        accounts?.forEach(insertEndpointConfig);
     }
     else {
         logger.debug(`Loading legacy PagerDuty endpoints from config.`);
         isLegacyConfig = true;
 
         EndpointConfig.default = {
-            eventsBaseUrl: config.getOptionalString('pagerDuty.eventsBaseUrl') !== undefined ? config.getString('pagerDuty.eventsBaseUrl') : 'https://events.pagerduty.com/v2',
-            apiBaseUrl: config.getOptionalString('pagerDuty.apiBaseUrl') !== undefined ? config.getString('pagerDuty.apiBaseUrl') : 'https://api.pagerduty.com'
+            eventsBaseUrl: config.getOptionalString('pagerDuty.eventsBaseUrl') ?? 'https://events.pagerduty.com/v2',
+            apiBaseUrl: config.getOptionalString('pagerDuty.apiBaseUrl') ?? 'https://api.pagerduty.com'
         };
     }
 }
@@ -929,7 +924,7 @@ export async function fetchWithRetries(url: string, options: RequestInit): Promi
             response = await fetch(url, options);
             return response;
         } catch (e) {
-            error = e;
+            error = e as Error;
         }
 
         const timeout = delay * factor;
